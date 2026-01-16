@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <!-- Configurações Estritas para Modo Aplicativo (Tela Cheia) -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Trainner">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#020617">
+    
+    <!-- Manifesto PWA embutido via Data URI -->
+    <link rel="manifest" id="pwa-manifest">
+
+    <title>Trainner Assist V2.2 - Oficial</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #020617;
+            color: #f8fafc;
+            -webkit-tap-highlight-color: transparent;
+            overflow-x: hidden;
+            /* Suporte para entalhes de câmeras frontais (notch) em tela cheia */
+            padding-top: env(safe-area-inset-top);
+        }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        
+        .tab-active {
+            background-color: #4f46e5;
+            color: white;
+            box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.4);
+        }
+
+        .loader {
+            border: 3px solid #1e293b;
+            border-top: 3px solid #4f46e5;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .calendar-day { aspect-ratio: 1/1; }
+
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        #loading-overlay { transition: opacity 0.5s ease-in-out; }
+
+        .ficha-menu-content {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            z-index: 60;
+            min-width: 160px;
+            animation: slideDown 0.2s ease-out forwards;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(5px); }
+        }
+
+        .show { display: block !important; }
+        .active-scale:active { transform: scale(0.95); }
+    </style>
+</head>
+<body class="pb-28">
+
+    <!-- OVERLAY DE CARREGAMENTO INICIAL -->
+    <div id="loading-overlay" class="fixed inset-0 z-[200] bg-slate-950 flex flex-col items-center justify-center text-center p-6">
+        <div class="loader w-12 h-12 mb-6"></div>
+        <p class="text-indigo-400 font-black text-xs uppercase tracking-[0.4em] animate-pulse">Sincronizando Nuvem...</p>
+        <p id="loading-subtext" class="text-[8px] text-slate-600 mt-4 uppercase tracking-widest text-center">Aguardando resposta do servidor...</p>
+    </div>
+
+    <!-- HEADER -->
+    <header class="sticky top-0 z-50 bg-slate-950/95 backdrop-blur-lg border-b border-slate-900 px-6 py-4 flex justify-between items-center">
+        <div class="relative">
+            <button onclick="toggleFichaMenu()" id="ficha-badge-btn" class="flex items-center gap-1.5 bg-indigo-600 text-[10px] font-black px-3 py-1.5 rounded-xl text-white uppercase tracking-tighter shadow-lg transition-all active-scale">
+                <span id="ficha-badge-text">Ficha --</span>
+                <i data-lucide="chevron-down" class="w-3 h-3 text-white"></i>
+            </button>
+            
+            <div id="ficha-menu" class="ficha-menu-content bg-slate-900 border border-slate-800 rounded-2xl p-2 shadow-2xl hidden"></div>
+            
+            <div class="flex flex-col gap-0.5 mt-2">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="zap" class="w-4 h-4 text-indigo-500 fill-indigo-500"></i>
+                    <span id="display-aluno" class="font-black text-xl tracking-tight text-white leading-none">Assist</span>
+                    <span id="cloud-indicator" class="w-2 h-2 rounded-full bg-slate-800" title="Status da Nuvem"></span>
+                </div>
+                <span id="ficha-data" class="text-[8px] text-slate-500 font-bold uppercase tracking-widest leading-none">Aguardando...</span>
+            </div>
+        </div>
+        <button onclick="openImportModal()" class="bg-indigo-600 border border-indigo-500 p-2.5 rounded-2xl active-scale transition-all shadow-lg shadow-indigo-600/20">
+            <i data-lucide="plus" class="w-5 h-5 text-white"></i>
+        </button>
+    </header>
+
+    <main class="max-w-md mx-auto p-4">
+        <!-- SELETOR DE PERFIL -->
+        <div class="flex gap-3 mb-6 p-1 bg-slate-900/50 rounded-3xl border border-slate-800">
+            <button onclick="switchProfile('lincoln')" id="btn-profile-lincoln" class="flex-1 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all">Lincoln</button>
+            <button onclick="switchProfile('nayara')" id="btn-profile-nayara" class="flex-1 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all">Nayara</button>
+        </div>
+
+        <!-- TABS -->
+        <div class="flex bg-slate-900/50 p-1.5 rounded-3xl mb-6 border border-slate-800">
+            <button onclick="switchTab('treino')" id="tab-treino" class="flex-1 py-3 rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition-all">
+                <i data-lucide="dumbbell" class="w-4 h-4"></i> Treino
+            </button>
+            <button onclick="switchTab('saude')" id="tab-saude" class="flex-1 py-3 rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition-all text-slate-500">
+                <i data-lucide="heart" class="w-4 h-4"></i> Saúde
+            </button>
+            <button onclick="switchTab('calendario')" id="tab-calendario" class="flex-1 py-3 rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2 text-slate-500 transition-all">
+                <i data-lucide="calendar" class="w-4 h-4"></i> Agenda
+            </button>
+        </div>
+
+        <!-- VIEWS -->
+        <div id="view-treino" class="space-y-6"></div>
+        <div id="view-saude" class="hidden space-y-4"></div>
+        <div id="view-calendario" class="hidden space-y-4">
+            <div class="bg-slate-900/60 p-6 rounded-[2.5rem] border border-slate-800 shadow-xl">
+                <div class="flex items-center justify-between mb-6">
+                    <button onclick="changeMonth(-1)" class="p-2 text-indigo-400 active-scale"><i data-lucide="chevron-left"></i></button>
+                    <h3 id="current-month-year" class="font-black text-xs uppercase tracking-[0.2em] text-indigo-400">Mês</h3>
+                    <button onclick="changeMonth(1)" class="p-2 text-indigo-400 active-scale"><i data-lucide="chevron-right"></i></button>
+                </div>
+                <div class="grid grid-cols-7 gap-2 text-center text-[8px] font-black text-slate-600 mb-4 uppercase">
+                    <div>Dom</div><div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div>
+                </div>
+                <div id="calendar-grid" class="grid grid-cols-7 gap-2"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- MODAL IMPORT -->
+    <div id="modal-import" class="fixed inset-0 z-[100] bg-black/95 hidden items-center justify-center p-6 text-white">
+        <div class="bg-slate-900 w-full max-w-sm rounded-[2.5rem] border border-slate-800 p-8 shadow-2xl">
+            <h2 class="font-black text-xl text-center mb-6 uppercase tracking-tighter">Gerenciar Dados</h2>
+            <p class="text-[10px] text-indigo-400 font-black uppercase tracking-widest text-center mb-3">Perfil: <span id="import-target-name">...</span></p>
+            <textarea id="json-input" class="w-full h-56 bg-slate-950 border border-slate-800 rounded-3xl p-5 text-[10px] font-mono text-indigo-300 outline-none mb-6 focus:border-indigo-500" placeholder="Cole aqui o JSON do treino..."></textarea>
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="closeImportModal()" class="py-4 text-xs font-black uppercase text-slate-500">Voltar</button>
+                <button onclick="handleImport()" class="py-4 bg-indigo-600 rounded-2xl text-xs font-black uppercase shadow-lg font-bold">Processar</button>
+            </div>
+            <p id="cloud-status-info" class="mt-4 text-[8px] text-slate-500 uppercase tracking-widest text-center"></p>
+        </div>
+    </div>
+
+    <!-- AI COACH MODAL -->
+    <div id="ai-modal" class="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md hidden items-end sm:items-center justify-center p-4">
+        <div class="bg-slate-900 w-full max-w-lg rounded-t-[2.5rem] border border-slate-800 p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center shadow-lg"><i data-lucide="bot" class="text-white w-6 h-6"></i></div>
+                    <div><h2 class="font-black text-lg leading-none text-white">AI Coach</h2><span class="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">Digital Trainer</span></div>
+                </div>
+                <button onclick="closeAI()" class="text-slate-500 hover:text-white p-2 active-scale"><i data-lucide="x" class="w-6 h-6"></i></button>
+            </div>
+            <div id="ai-content" class="text-slate-300 text-sm leading-relaxed space-y-4"></div>
+            <div id="ai-image-container" class="mt-6 rounded-3xl overflow-hidden hidden border border-slate-800 shadow-inner"></div>
+            <div id="ai-actions" class="mt-8 grid grid-cols-2 gap-3 hidden">
+                <button onclick="closeAI()" class="py-4 bg-slate-800 rounded-2xl text-[10px] font-black uppercase text-white">Voltar</button>
+                <button onclick="generateExerciseImage()" id="btn-gen-img" class="py-4 bg-indigo-600 rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2 text-white">
+                    <i data-lucide="image" class="w-4 h-4"></i> Gerar Imagem
+                </button>
+            </div>
+            <div id="ai-loading" class="py-12 flex flex-col items-center justify-center gap-4 hidden">
+                <div class="loader w-8 h-8"></div><p class="text-xs font-bold text-indigo-400 animate-pulse">Biomecânica...</p>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // ==========================================================
+        // CONFIGURAÇÃO DO SEU BANCO DE DADOS (FIREBASE) ATUALIZADA
+        // ==========================================================
+        const MEU_FIREBASE_CONFIG = {
+            apiKey: "AIzaSyCpdKHTixKhBkYMisxESVcREFX_anmQV_4",
+            authDomain: "trainnerassist.firebaseapp.com",
+            projectId: "trainnerassist",
+            storageBucket: "trainnerassist.firebasestorage.app",
+            messagingSenderId: "62207809776",
+            appId: "1:62207809776:web:28cd8c4d4254a2da83ca35",
+            measurementId: "G-B9B0P9SSNC"
+        };
+        // ==========================================================
+
+        const firebaseConfigRaw = typeof __firebase_config !== 'undefined' ? __firebase_config : null;
+        let firebaseConfig = firebaseConfigRaw ? JSON.parse(firebaseConfigRaw) : MEU_FIREBASE_CONFIG;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'trainner-assist-v2-final';
+
+        // --- MANIFESTO PWA ---
+        const manifest = {
+            "name": "Trainner Assist",
+            "short_name": "Trainner",
+            "start_url": ".",
+            "display": "standalone",
+            "background_color": "#020617",
+            "theme_color": "#4f46e5",
+            "icons": [{ "src": "https://cdn-icons-png.flaticon.com/512/2964/2964514.png", "sizes": "512x512", "type": "image/png" }]
+        };
+        const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/manifest+json'});
+        const manifestLink = document.getElementById('pwa-manifest');
+        if(manifestLink) manifestLink.setAttribute('href', URL.createObjectURL(manifestBlob));
+
+        // --- CORE LOGIC ---
+        const FICHA_COLORS = ["#4f46e5", "#9333ea", "#059669", "#ea580c", "#e11d48", "#0891b2"];
+        const DEFAULT_SHEET = (name) => ({
+            cabecalho: { aluno: name, num_ficha: 1, data_criacao: "16/01/2026", objetivo: "Importe sua ficha" },
+            bioimpedancia_atual: { peso: 0, imc: 0, gordura_perc: 0, gordura_visceral: 0, massa_muscular: 0, tmb: 0 },
+            historico_breve: { notas_coach: "Pressione + para colar seu JSON." },
+            treino_ciclico: [{ dia: "A", exercicios: [{ nome: "Exemplo Inicial", series: 0, reps: "0", pesoReal: 0, concluido: false, tipo: "forca" }]}],
+            color: FICHA_COLORS[0],
+            isPlaceholder: true 
+        });
+
+        let state = {
+            activeProfile: 'lincoln', activeTab: 'treino', viewDate: new Date(),
+            profiles: {
+                lincoln: { fichas: [], activeFichaIndex: 0, calendario: {} },
+                nayara: { fichas: [], activeFichaIndex: 0, calendario: {} }
+            },
+            user: null, db: null, initialized: false, cloudEnabled: false
+        };
+
+        const loadTimeout = setTimeout(() => {
+            if (!state.initialized) {
+                state.initialized = true;
+                hideLoader();
+            }
+        }, 6000);
+
+        async function init() {
+            if (!firebaseConfig || !firebaseConfig.apiKey || firebaseConfig.apiKey === "none") {
+                state.cloudEnabled = false;
+                state.initialized = true;
+                state.profiles.lincoln.fichas = [DEFAULT_SHEET("Lincoln")];
+                state.profiles.nayara.fichas = [DEFAULT_SHEET("Nayara")];
+                hideLoader();
+                return;
+            }
+
+            try {
+                const app = initializeApp(firebaseConfig);
+                const auth = getAuth(app);
+                state.db = getFirestore(app);
+                state.cloudEnabled = true;
+
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                onAuthStateChanged(auth, (user) => {
+                    if (user) { 
+                        state.user = user; 
+                        setupListeners(); 
+                    } else {
+                        state.initialized = true;
+                        hideLoader();
+                    }
+                });
+            } catch (e) { 
+                state.initialized = true;
+                hideLoader(); 
+            }
+        }
+
+        async function setupListeners() {
+            let loadedCount = 0;
+            ['lincoln', 'nayara'].forEach(key => {
+                const docRef = doc(state.db, 'artifacts', appId, 'users', state.user.uid, 'profiles', key);
+                onSnapshot(docRef, (snap) => {
+                    if (snap.exists()) {
+                        state.profiles[key] = snap.data();
+                    } else {
+                        state.profiles[key].fichas = [DEFAULT_SHEET(key === 'lincoln' ? "Lincoln" : "Nayara")];
+                    }
+                    loadedCount++;
+                    if (!state.initialized && loadedCount >= 2) { 
+                        clearTimeout(loadTimeout);
+                        state.initialized = true; 
+                        hideLoader(); 
+                    } else if (state.initialized) {
+                        render();
+                    }
+                }, () => {
+                    loadedCount++;
+                    if (loadedCount >= 2) { state.initialized = true; hideLoader(); }
+                });
+            });
+        }
+
+        function hideLoader() {
+            const overlay = document.getElementById('loading-overlay');
+            if (overlay) { 
+                overlay.style.opacity = '0'; 
+                setTimeout(() => { overlay.style.display = 'none'; render(); }, 500); 
+            }
+        }
+
+        window.toggleFichaMenu = () => document.getElementById('ficha-menu')?.classList.toggle('show');
+        window.selectFicha = (index) => {
+            state.profiles[state.activeProfile].activeFichaIndex = index;
+            document.getElementById('ficha-menu')?.classList.remove('show');
+            saveToCloud(); render();
+        };
+
+        window.switchProfile = (p) => { state.activeProfile = p; render(); };
+        window.switchTab = (t) => { state.activeTab = t; render(); };
+        window.changeMonth = (delta) => { state.viewDate = new Date(state.viewDate.getFullYear(), state.viewDate.getMonth() + delta, 1); render(); };
+
+        window.toggleExercise = async (di, ei) => {
+            const p = state.profiles[state.activeProfile];
+            const curFicha = p.fichas[p.activeFichaIndex];
+            if (curFicha.isPlaceholder) return;
+            const d = curFicha.treino_ciclico[di];
+            const ex = d.exercicios[ei];
+            ex.concluido = !ex.concluido;
+            if (d.exercicios.every(e => e.concluido) && !d.concluido) {
+                const dk = new Date().toISOString().split('T')[0];
+                if (!p.calendario) p.calendario = {};
+                p.calendario[dk] = { treino: d.dia, color: curFicha.color };
+                if (curFicha.treino_ciclico.every(day => day.concluido)) {
+                    curFicha.treino_ciclico.forEach(day => { day.concluido = false; day.exercicios.forEach(e => e.concluido = false); });
+                }
+            }
+            await saveToCloud(); render();
+        };
+
+        window.updateWeight = async (di, ei, v) => {
+            const p = state.profiles[state.activeProfile];
+            if (p.fichas[p.activeFichaIndex].isPlaceholder) return;
+            p.fichas[p.activeFichaIndex].treino_ciclico[di].exercicios[ei].pesoReal = Number(v);
+            await saveToCloud();
+        };
+
+        async function saveToCloud() {
+            if (!state.cloudEnabled || !state.user || !state.db) return;
+            const docRef = doc(state.db, 'artifacts', appId, 'users', state.user.uid, 'profiles', state.activeProfile);
+            try { await setDoc(docRef, state.profiles[state.activeProfile]); } catch (e) {}
+        }
+
+        window.handleImport = async () => {
+            const val = document.getElementById('json-input').value;
+            if (!val) return;
+            try {
+                const data = JSON.parse(val);
+                const p = state.profiles[state.activeProfile];
+                const isReplacing = p.fichas.length === 1 && p.fichas[0].isPlaceholder;
+                if (!isReplacing && p.fichas.length >= 6) return alert("Máximo 6 fichas.");
+                const newIndex = isReplacing ? 0 : p.fichas.length;
+                const clean = { ...data, color: FICHA_COLORS[newIndex], isPlaceholder: false,
+                    treino_ciclico: data.treino_ciclico.map(d => ({ ...d, concluido: false,
+                        exercicios: d.exercicios.map(e => ({ ...e, concluido: false, pesoReal: e.peso || 0, tipo: e.tipo || (e.reps.includes('min') ? 'aerobico' : 'forca') })) })) };
+                if (isReplacing) p.fichas = [clean]; else p.fichas.push(clean);
+                p.activeFichaIndex = isReplacing ? 0 : p.fichas.length - 1;
+                await saveToCloud(); closeImportModal(); document.getElementById('json-input').value = ''; render();
+            } catch (e) { alert("JSON Inválido."); }
+        };
+
+        window.askAI = async (exName) => {
+            const modal = document.getElementById('ai-modal');
+            if (modal) modal.style.display = 'flex';
+            document.getElementById('ai-content').innerHTML = '';
+            document.getElementById('ai-image-container').style.display = 'none';
+            document.getElementById('ai-actions').classList.add('hidden');
+            document.getElementById('ai-loading').classList.remove('hidden');
+            state.currentExerciseForAI = exName;
+            try {
+                const apiKeyGemini = ""; 
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKeyGemini}`;
+                const response = await fetch(url, { method: 'POST', body: JSON.stringify({ contents: [{ parts: [{ text: `Explique a técnica biomecânica de ${exName}.` }] }], systemInstruction: { parts: [{ text: "Seja breve e técnico." }] } })});
+                const res = await response.json();
+                if (document.getElementById('ai-loading')) document.getElementById('ai-loading').classList.add('hidden');
+                if (document.getElementById('ai-content')) document.getElementById('ai-content').innerHTML = `<p>${res.candidates[0].content.parts[0].text.replace(/\n/g, '<br>')}</p>`;
+                if (document.getElementById('ai-actions')) document.getElementById('ai-actions').classList.remove('hidden');
+            } catch (e) { if (document.getElementById('ai-loading')) document.getElementById('ai-loading').classList.add('hidden'); }
+        };
+
+        window.generateExerciseImage = async () => {
+            const btn = document.getElementById('btn-gen-img'); if (btn) btn.innerHTML = `<div class="loader w-4 h-4"></div>`;
+            try {
+                const apiKeyImagen = ""; 
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${apiKeyImagen}`;
+                const res = await fetch(url, { method: 'POST', body: JSON.stringify({ instances: { prompt: `Fitness athlete doing exercise correctly` }, parameters: { sampleCount: 1 } })});
+                const data = await res.json();
+                const container = document.getElementById('ai-image-container');
+                if (container) {
+                    container.innerHTML = `<img src="data:image/png;base64,${data.predictions[0].bytesBase64Encoded}" class="w-full">`;
+                    container.style.display = 'block';
+                }
+                document.getElementById('ai-actions')?.classList.add('hidden');
+            } catch (e) { alert("Erro na imagem."); }
+            finally { if (btn) btn.innerHTML = `<i data-lucide="image"></i> Ver Imagem`; lucide.createIcons(); }
+        };
+
+        window.closeAI = () => { document.getElementById('ai-modal').style.display = 'none'; };
+        window.openImportModal = () => { 
+            const nameEl = document.getElementById('import-target-name');
+            if (nameEl) nameEl.innerText = state.activeProfile; 
+            document.getElementById('modal-import').style.display = 'flex'; 
+            const info = document.getElementById('cloud-status-info');
+            if (info) info.innerText = state.cloudEnabled ? "PROGRESSO SALVO NA NUVEM" : "AVISO: MODO LOCAL (SALVAMENTO DESATIVADO)";
+        };
+        window.closeImportModal = () => { document.getElementById('modal-import').style.display = 'none'; };
+
+        function render() {
+            if (!state.initialized) return;
+            const p = state.profiles[state.activeProfile];
+            if (!p || !p.fichas || p.fichas.length === 0) return;
+            const cur = p.fichas[p.activeFichaIndex];
+
+            const safeSetText = (id, txt) => { const el = document.getElementById(id); if (el) el.innerText = txt; };
+
+            const badgeBtn = document.getElementById('ficha-badge-btn');
+            if (badgeBtn) badgeBtn.style.backgroundColor = cur.color;
+            safeSetText('ficha-badge-text', `Ficha ${cur.cabecalho.num_ficha || (p.activeFichaIndex + 1)}`);
+            safeSetText('ficha-data', `Criada em: ${cur.cabecalho.data_criacao || '--'}`);
+            safeSetText('display-aluno', cur.cabecalho.aluno);
+
+            const indicator = document.getElementById('cloud-indicator');
+            if(indicator) indicator.className = `w-2 h-2 rounded-full ${state.cloudEnabled ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500'}`;
+
+            const menu = document.getElementById('ficha-menu');
+            if (menu) menu.innerHTML = p.fichas.map((f, i) => `
+                <button onclick="selectFicha(${i})" class="w-full text-left p-3 mb-1 rounded-xl flex items-center justify-between transition-all ${p.activeFichaIndex === i ? 'bg-white/10' : 'hover:bg-white/5'}">
+                    <div class="flex items-center gap-2">
+                        <div class="w-3 h-3 rounded-full" style="background-color: ${f.color}"></div>
+                        <span class="text-[10px] font-black uppercase text-white">Ficha ${f.cabecalho.num_ficha || (i+1)}</span>
+                    </div>
+                    ${p.activeFichaIndex === i ? '<i data-lucide="check" class="w-3 h-3 text-white"></i>' : ''}
+                </button>
+            `).join('');
+
+            document.getElementById('btn-profile-lincoln').className = `flex-1 py-3 rounded-2xl text-[10px] font-black uppercase transition-all ${state.activeProfile === 'lincoln' ? 'bg-white text-black shadow-lg' : 'text-slate-500'}`;
+            document.getElementById('btn-profile-nayara').className = `flex-1 py-3 rounded-2xl text-[10px] font-black uppercase transition-all ${state.activeProfile === 'nayara' ? 'bg-white text-black shadow-lg' : 'text-slate-500'}`;
+
+            ['treino', 'saude', 'calendario'].forEach(t => {
+                const btn = document.getElementById(`tab-${t}`); if (btn) btn.className = `flex-1 py-3 rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition-all ${state.activeTab === t ? 'tab-active' : 'text-slate-500'}`;
+                const view = document.getElementById(`view-${t}`); if (view) view.classList.toggle('hidden', state.activeTab !== t);
+            });
+
+            if (state.activeTab === 'treino') {
+                const vt = document.getElementById('view-treino');
+                if (vt) vt.innerHTML = cur.treino_ciclico.map((d, di) => `
+                    <section class="rounded-[2rem] border overflow-hidden ${d.concluido ? 'bg-green-500/10 border-green-500/30' : 'bg-slate-900/40 border-slate-800'}">
+                        <div class="p-4 flex justify-between items-center border-b border-slate-800/30 uppercase italic text-[10px] font-black" style="color: ${cur.color}">
+                            DIA ${d.dia} ${d.concluido ? '<i data-lucide="check-circle-2" class="text-green-500 w-4 h-4"></i>' : ''}
+                        </div>
+                        <div class="p-1 space-y-px">${d.exercicios.map((ex, ei) => `
+                            <div class="p-3 flex items-center gap-3 ${ex.concluido ? 'opacity-30' : ''}">
+                                <button onclick="toggleExercise(${di}, ${ei})" class="w-8 h-8 rounded-xl border-2 flex-shrink-0 flex items-center justify-center ${ex.concluido ? 'bg-green-500 border-green-500 shadow-sm' : 'bg-slate-950 border-slate-700'}">
+                                    ${ex.concluido ? '<i data-lucide="check" class="text-white w-4 h-4"></i>' : ''}
+                                </button>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-1">
+                                        <p class="font-bold text-xs truncate ${ex.concluido ? 'line-through' : ''}">${ex.nome}</p>
+                                        <button onclick="askAI('${ex.nome}')" class="p-1 active-scale" style="color: ${cur.color}"><i data-lucide="help-circle" class="w-3 h-3"></i></button>
+                                    </div>
+                                    <p class="text-[8px] text-slate-500 font-bold uppercase leading-none mt-1">${ex.series}x ${ex.reps}</p>
+                                </div>
+                                <div class="bg-slate-950 px-2 py-1.5 rounded-lg border border-slate-800 text-center w-11 flex-shrink-0">
+                                    <span class="text-[6px] font-black text-slate-600 block uppercase mb-1 leading-none">${ex.tipo === 'aerobico' || ex.reps.includes('min') ? 'Min' : 'Kg'}</span>
+                                    <input type="number" value="${ex.pesoReal}" onchange="updateWeight(${di}, ${ei}, this.value)" class="w-full bg-transparent text-center text-[11px] font-bold outline-none leading-none" style="color: ${cur.color}">
+                                </div>
+                            </div>`).join('')}</div>
+                    </section>`).join('');
+            } else if (state.activeTab === 'saude') {
+                const b = cur.bioimpedancia_atual;
+                const items = [{l:'Peso',v:b.peso,u:'kg',i:'scale'},{l:'Gordura',v:b.gordura_perc,u:'%',i:'zap'},{l:'Massa Musc.',v:b.massa_muscular,u:'kg',i:'dumbbell'},{l:'Visceral',v:b.gordura_visceral,u:'nv',i:'alert-triangle'},{l:'IMC',v:b.imc,u:'',i:'activity'},{l:'TMB',v:b.tmb,u:'kcal',i:'flame'}];
+                const vs = document.getElementById('view-saude');
+                if (vs) vs.innerHTML = `<div class="grid grid-cols-2 gap-3">${items.map(it=>`
+                    <div class="bg-slate-900/60 p-5 rounded-[2rem] border border-slate-800 shadow-md">
+                        <i data-lucide="${it.i}" class="w-4 h-4 mb-3" style="color: ${cur.color}"></i>
+                        <p class="text-[10px] font-bold text-slate-600 uppercase tracking-tighter">${it.l}</p>
+                        <p class="text-xl font-black text-white">${it.v}<span class="text-xs text-slate-600 ml-1 leading-none">${it.u}</span></p>
+                    </div>`).join('')}</div>
+                    <div class="bg-indigo-900/10 border border-indigo-500/20 p-6 rounded-[2rem] mt-4 text-sm text-slate-300 italic shadow-inner text-center">"${cur.historico_breve.notas_coach || 'Nenhuma nota disponível.'}"</div>`;
+            } else if (state.activeTab === 'calendario') {
+                const dt = state.viewDate; const m = dt.getMonth(); const y = dt.getFullYear();
+                const names = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+                safeSetText('current-month-year', `${names[m]} ${y}`);
+                let h = ''; const first = new Date(y, m, 1).getDay(); const days = new Date(y, m + 1, 0).getDate();
+                for(let i=0; i<first; i++) h += '<div></div>';
+                for(let i=1; i<=days; i++) {
+                    const dk = `${y}-${String(m+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+                    const log = p.calendario[dk];
+                    const t = i === new Date().getDate() && m === new Date().getMonth() && y === new Date().getFullYear();
+                    const bgColor = log ? log.color : 'rgba(15, 23, 42, 0.5)';
+                    const textColor = log ? 'white' : '#475569';
+                    h += `<div class="calendar-day flex flex-col items-center justify-center rounded-xl border text-[10px] font-bold ${t ? 'border-indigo-500 ring-1 ring-indigo-500 shadow-md' : 'border-slate-800'}" style="background-color: ${bgColor}">
+                        <span class="text-[7px] opacity-40 leading-none" style="color: ${textColor}">${i}</span>
+                        ${log ? `<span class="font-black text-xs leading-none mt-1" style="color: ${textColor}">${log.treino}</span>` : ''}
+                    </div>`;
+                }
+                const cg = document.getElementById('calendar-grid'); if (cg) cg.innerHTML = h;
+            }
+            lucide.createIcons();
+        }
+
+        init();
+    </script>
+</body>
+</html>
